@@ -1,0 +1,189 @@
+= Deploy to Cloud Foundry
+
+This document contains instructions for deploying the Azure service broker to a Cloud Foundry foundation.
+
+All instructions below assume that the commands are being run from the root of the project repository.
+
+== Prerequisites
+
+=== Cloud Foundry CLI
+
+These instructions use the `cf` CLI to interact with a running Cloud Foundry foundation.
+Follow the https://docs.cloudfoundry.org/cf-cli/[`cf` documentation] to install and verify the CLI.
+
+=== Cloud Foundry foundation
+
+A Cloud Foundry foundation will be used to deploy the service broker application and register it to the service marketplace.
+This can be a public hosted Cloud Foundry, a private Cloud Foundry, or a workstation-deployed Cloud Foundry like https://pivotal.io/pcf-dev[PCF Dev].
+
+Use the `cf` CLI to https://docs.cloudfoundry.org/cf-cli/getting-started.html#login[log into] Cloud Foundry and target an organization and space for deployment of an application.
+
+== Build the service broker application
+
+You can use the Maven wrapper included in the project or your own Maven installation to package the application.
+
+----
+./mvnw clean package
+----
+
+== Deploy and test the service broker
+
+=== Deploy the service broker application
+
+Deploy the service broker application to Cloud Foundry:
+
+----
+$ cf push
+Pushing from manifest to org sample / space test as user@example.com...
+Using manifest file manifest.yml
+Getting app info...
+Creating app with these attributes...
++ name:       azure-open-service-broker
+  path:       target/azure-osb-0.0.1-SNAPSHOT.jar
++ memory:     1G
+  routes:
++   azure-open-service-broker.apps.example.com
+
+...
+
+name:              azure-open-service-broker
+requested state:   started
+instances:         1/1
+usage:             1G x 1 instances
+routes:            azure-open-service-broker.apps.example.com
+
+...
+
+      state     since                  cpu    memory         disk           details
+#0   running   2018-02-13T21:58:44Z   0.0%   290.8M of 1G   144.7M of 1G
+----
+
+=== Verify the service broker application
+
+Note the value of the `route` row in the output from the command above.
+Use this route to build a URL to access the `/v2/catalog` endpoint of the service broker application.
+
+----
+$ curl https://azure-open-service-broker.apps.example.com/v2/catalog -u admin:supersecret
+{"services":[{"id":"cosmosdb","name":"CosmosDB","description":"CosmosDB Account","bindable":true,"plan_updateable":false,"plans":[{"id":"account","name":"account","description":"Creates a CosmosDB account","bindable":false,"free":true},{"id":"database","name":"database","description":"Creates an empty CosmosDB database","free":true}],"tags":["cosmosdb","database"]}]}
+----
+
+== Register and test the service broker
+
+=== Register to the services marketplace
+
+Now that the application has been deployed and verified, it can be registered to the Cloud Foundry services marketplace.
+
+==== With administrator privileges
+
+If you have administrator privileges on Cloud Foundry, you can make the service broker available in all organizations and spaces.
+
+The Open Service Broker API endpoints in the service broker application are secured with a basic auth username and password.
+Register the service broker using the URL from above and the credentials:
+
+----
+$ cf create-service-broker azure-osb admin supersecret https://azure-open-service-broker.apps.example.com
+Creating service broker azure-osb as admin...
+OK
+----
+
+Make the service offerings from the service broker visible in the services marketplace:
+
+----
+$ cf enable-service-access azure-osb
+Enabling access to all plans of service azure-osb for all orgs as admin...
+OK
+----
+
+==== Without administrator privileges
+
+If you do not have administrator privileges on Cloud Foundry, you can make the service broker available in a single organization and space that you have privileges in:
+
+----
+$ cf create-service-broker azure-osb admin supersecret https://azure-open-service-broker.cfapps.io --space-scoped
+Creating service broker azure-osb in org sample / space test as user@example.com...
+OK
+----
+
+=== View to the services marketplace
+
+Show the services marketplace:
+
+----
+$ cf marketplace
+Getting services from marketplace in org sample / space test as user@example.com...
+OK
+
+service                       plans                 description
+azure-osb                     account,database      CosmosDB Account
+
+TIP:  Use 'cf marketplace -s SERVICE' to view descriptions of individual plans of a given service.
+----
+
+----
+$ cf marketplace -s azure-osb
+Getting service plan information for service azure-osb as user@example.com...
+OK
+
+service plan   description                          free or paid
+account        Creates a CosmosDB account           free
+database       Creates an empty CosmosDB database   free
+----
+
+== Use the service broker
+
+=== Create a service instance
+
+Create an instance of a brokered service from the azure-osb service broker:
+
+----
+$ cf create-service azure-osb account azure-account
+Creating service instance azure-account in org sample / space test as user@example.com...
+OK
+----
+
+Show the details of the created service instance:
+
+----
+$ cf service azure-account
+Showing info of service azure-account in org sample / space test as user@example.com...
+
+name:            azure-account
+service:         azure-osb
+bound apps:
+tags:
+plan:            account
+description:     Creates a CosmosDB account
+documentation:
+dashboard:
+
+Showing status of last operation from service azure-account...
+
+status:    create succeeded
+message:
+started:   2018-02-13T22:24:21Z
+updated:   2018-02-13T22:24:21Z
+----
+
+=== Create a service binding
+
+Create a service binding for the service instance:
+
+----
+$ cf create-service-key azure-account azure-account-binding
+Creating service key azure-account-binding for service instance azure-account as user@example.com...
+OK
+----
+
+Show the details of the created service binding:
+
+----
+$ cf service-key azure-account azure-account-binding
+Getting key azure-account-binding for service instance azure-account as user@example.com...
+
+{
+ "password": "b371a19a-cab3-4ee1-9675-6b6cd9493952",
+ "uri": "https://ccd45032-5ac9-487a-a37a-506eb65b0cf9.database.azure.com/blabla",
+ "username": "55519803-3d8a-4fd4-a17e-e2096ebed9b7"
+}
+----
