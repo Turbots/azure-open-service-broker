@@ -25,36 +25,78 @@ import org.springframework.cloud.servicebroker.model.instance.*;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse.CreateServiceInstanceResponseBuilder;
 import org.springframework.cloud.servicebroker.service.ServiceInstanceService;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import javax.annotation.PostConstruct;
 import java.util.Optional;
 
 @Service
-public class BookStoreServiceInstanceService implements ServiceInstanceService {
+public class CosmosDBService implements ServiceInstanceService {
 
-    private static final Logger log = LoggerFactory.getLogger(BookStoreServiceInstanceService.class);
+    private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
 
     private final ServiceInstanceRepository instanceRepository;
+    private final WebClient webClient;
 
-    public BookStoreServiceInstanceService(ServiceInstanceRepository instanceRepository) {
+    public CosmosDBService(ServiceInstanceRepository instanceRepository) {
         this.instanceRepository = instanceRepository;
+        this.webClient = WebClient.builder().build();
+    }
+
+    // EXAMPLE ON HOW TO FETCH A SECURITY TOKEN AND CALLING THE AZURE API
+    @PostConstruct
+    public void postConstruct() {
+        String tenantId = "29248f74-371f-4db2-9a50-c62a6877a0c1";
+        String clientId = "36ecff98-2d0d-4506-8434-273b3a708137";
+        String subscriptionId = "b247fdb9-4ee3-4f9e-a68b-5b16c2302ca2";
+
+        String clientSecret = "ENTER_SECRET_HERE";
+
+        String token = webClient.post()
+                .uri("https://login.microsoftonline.com/" + tenantId + "/oauth2/token")
+                .body(BodyInserters
+                        .fromFormData("grant_type", "client_credentials")
+                        .with("scope", "user_impersonation")
+                        .with("resource", "https://management.azure.com/")
+                ).headers(headers -> {
+                    headers.setBasicAuth(clientId, clientSecret);
+                })
+                .retrieve()
+                .bodyToMono(SecurityToken.class)
+                .map(response -> {
+                    logger.info("Received a security token [{}]", response.getAccessToken());
+                    return response.getAccessToken();
+                }).block();
+
+        webClient.get()
+                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/dhubau-test?api-version=2015-04-08")
+                .headers(headers -> headers.setBearerAuth(token))
+                .retrieve()
+                .bodyToMono(String.class)
+                .map(response -> {
+                    logger.info(response);
+                    return "Response: " + response;
+                }).block();
     }
 
     @Override
     public Mono<CreateServiceInstanceResponse> createServiceInstance(CreateServiceInstanceRequest request) {
-        log.info("Creating Service Instance [{}] for Service [{}] and Plan [{}]", request.getServiceInstanceId(), request.getServiceDefinitionId(), request.getPlanId());
+        logger.info("Creating Service Instance [{}] for Service [{}] and Plan [{}]", request.getServiceInstanceId(), request.getServiceDefinitionId(), request.getPlanId());
 
         String instanceId = request.getServiceInstanceId();
 
         CreateServiceInstanceResponseBuilder responseBuilder = CreateServiceInstanceResponse.builder();
 
         if (instanceRepository.existsById(instanceId)) {
-            responseBuilder.instanceExisted(true);
+            return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Already Exists in the database").build());
         } else {
-            saveInstance(request, instanceId);
-        }
+            // TO BE IMPLEMENTED
 
-        return Mono.just(responseBuilder.operation("Service Instance Created").build());
+            saveInstance(request, instanceId);
+            return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Created").build());
+        }
     }
 
     @Override
@@ -79,6 +121,8 @@ public class BookStoreServiceInstanceService implements ServiceInstanceService {
         String instanceId = request.getServiceInstanceId();
 
         if (instanceRepository.existsById(instanceId)) {
+            // TO BE IMPLEMENTED
+
             instanceRepository.deleteById(instanceId);
 
             return Mono.just(DeleteServiceInstanceResponse.builder().build());
