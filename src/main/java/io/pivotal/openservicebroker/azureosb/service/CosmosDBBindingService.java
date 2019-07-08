@@ -28,11 +28,11 @@ import reactor.core.publisher.Mono;
 import java.util.Optional;
 
 @Service
-public class BookStoreServiceInstanceBindingService implements ServiceInstanceBindingService {
+public class CosmosDBBindingService implements ServiceInstanceBindingService {
 
     private final ServiceBindingRepository bindingRepository;
 
-    public BookStoreServiceInstanceBindingService(ServiceBindingRepository bindingRepository) {
+    public CosmosDBBindingService(ServiceBindingRepository bindingRepository) {
         this.bindingRepository = bindingRepository;
     }
 
