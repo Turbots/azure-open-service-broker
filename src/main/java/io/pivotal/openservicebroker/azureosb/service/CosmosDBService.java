@@ -47,7 +47,7 @@ public class CosmosDBService implements ServiceInstanceService {
 
     // EXAMPLE ON HOW TO FETCH A SECURITY TOKEN AND CALL THE AZURE API
     //
-    @PostConstruct
+    //@PostConstruct
     public void postConstruct() {
         String tenantId = "29248f74-371f-4db2-9a50-c62a6877a0c1";
         String clientId = "36ecff98-2d0d-4506-8434-273b3a708137";

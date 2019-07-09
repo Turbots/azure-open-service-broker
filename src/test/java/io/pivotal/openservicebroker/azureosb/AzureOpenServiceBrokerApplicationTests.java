@@ -1,21 +1,32 @@
 package io.pivotal.openservicebroker.azureosb;
 
+import java.util.UUID;
+
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.client.AutoConfigureWebClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceRequest;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
 
 import io.pivotal.openservicebroker.azureosb.service.CosmosDBService;
 import reactor.core.publisher.Mono;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest
+@SpringBootTest(properties = "spring.main.web-application-type=reactive", webEnvironment = WebEnvironment.RANDOM_PORT)
+@AutoConfigureWebClient
 public class AzureOpenServiceBrokerApplicationTests {
 
+	@Autowired
+	private WebTestClient webTestClient;
+	
 	@Autowired
 	private CosmosDBService cosmosDBService;
 
@@ -24,10 +35,24 @@ public class AzureOpenServiceBrokerApplicationTests {
 	}
 
 	@Test
+	public void catalog()	{
+		webTestClient.get()
+		.uri("/v2/catalog")
+		.exchange()
+		.expectStatus().isOk();
+	}
+
+	@Test
 	public void createServiceInstance()	{
-		CreateServiceInstanceRequest request = CreateServiceInstanceRequest.builder().build();
-		Mono<CreateServiceInstanceResponse> responseMono = cosmosDBService.createServiceInstance(request);
-		CreateServiceInstanceResponse response = responseMono.block();
-		Assertions.assertThat(response.isInstanceExisted()).isTrue();
+		CreateServiceInstanceRequest request = CreateServiceInstanceRequest.builder()
+		.serviceDefinitionId("cosmosdb")
+		.planId("db-small")
+		.build();
+		String instanceId = "my-service-instance-id";
+		webTestClient.put()
+		.uri("/v2/service_instances/{instanceId}", instanceId)
+		.body(BodyInserters.fromObject(request))
+		.exchange()
+		.expectStatus().isEqualTo(HttpStatus.OK);
 	}
 }
