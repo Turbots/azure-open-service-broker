@@ -16,6 +16,10 @@
 
 package io.pivotal.openservicebroker.azureosb.service;
 
+import com.microsoft.azure.management.Azure;
+import com.microsoft.azure.management.cosmosdb.CosmosDBAccount;
+import com.microsoft.azure.management.cosmosdb.DatabaseAccountKind;
+import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceInstanceRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceInstance;
 import org.slf4j.Logger;
@@ -25,13 +29,11 @@ import org.springframework.cloud.servicebroker.exception.ServiceInstanceDoesNotE
 import org.springframework.cloud.servicebroker.model.instance.*;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse.CreateServiceInstanceResponseBuilder;
 import org.springframework.cloud.servicebroker.service.ServiceInstanceService;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import javax.annotation.PostConstruct;
+import java.io.File;
+import java.io.IOException;
 import java.util.Optional;
 
 @Service
@@ -39,21 +41,10 @@ public class CosmosDBService implements ServiceInstanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
 
-    @Value("${clientSecret}")
-    private String clientSecret;
-    @Value("${tenantId}")
-    private String tenantId;
-    @Value("${clientId}")
-    private String clientId;
-    @Value("${subscriptionId}")
-    private String subscriptionId;
-
     private final ServiceInstanceRepository instanceRepository;
-    private final WebClient webClient;
 
     public CosmosDBService(ServiceInstanceRepository instanceRepository) {
         this.instanceRepository = instanceRepository;
-        this.webClient = WebClient.builder().build();
     }
 
     // EXAMPLE ON HOW TO FETCH A SECURITY TOKEN AND CALL THE AZURE API
@@ -62,31 +53,31 @@ public class CosmosDBService implements ServiceInstanceService {
     public void postConstruct() {
 
 
-        String token = webClient.post()
-                .uri("https://login.microsoftonline.com/" + tenantId + "/oauth2/token")
-                .body(BodyInserters
-                        .fromFormData("grant_type", "client_credentials")
-                        .with("scope", "user_impersonation")
-                        .with("resource", "https://management.azure.com/")
-                ).headers(headers -> {
-                    headers.setBasicAuth(clientId, clientSecret);
-                })
-                .retrieve()
-                .bodyToMono(SecurityToken.class)
-                .map(response -> {
-                    logger.info("Received a security token [{}]", response.getAccessToken());
-                    return response.getAccessToken();
-                }).block();
-
-        webClient.get()
-                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/test-cosmos-db-hackaton?api-version=2015-04-08")
-                .headers(headers -> headers.setBearerAuth(token))
-                .retrieve()
-                .bodyToMono(String.class)
-                .map(response -> {
-                    logger.info(response);
-                    return "Response: " + response;
-                }).block();
+//        String token = webClient.post()
+//                .uri("https://login.microsoftonline.com/" + tenantId + "/oauth2/token")
+//                .body(BodyInserters
+//                        .fromFormData("grant_type", "client_credentials")
+//                        .with("scope", "user_impersonation")
+//                        .with("resource", "https://management.azure.com/")
+//                ).headers(headers -> {
+//                    headers.setBasicAuth(clientId, clientSecret);
+//                })
+//                .retrieve()
+//                .bodyToMono(SecurityToken.class)
+//                .map(response -> {
+//                    logger.info("Received a security token [{}]", response.getAccessToken());
+//                    return response.getAccessToken();
+//                }).block();
+//
+//        webClient.get()
+//                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/test-cosmos-db-hackaton?api-version=2015-04-08")
+//                .headers(headers -> headers.setBearerAuth(token))
+//                .retrieve()
+//                .bodyToMono(String.class)
+//                .map(response -> {
+//                    logger.info(response);
+//                    return "Response: " + response;
+//                }).block();
     }
 
     @Override
@@ -101,6 +92,21 @@ public class CosmosDBService implements ServiceInstanceService {
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Already Exists in the database").build());
         } else {
             // TO BE IMPLEMENTED
+
+            Azure azure = null;
+            try {
+                azure = Azure.authenticate(new File(this.getClass().getClassLoader().getResource("auth.json").getFile())).withDefaultSubscription();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            CosmosDBAccount cosmosDBAccount = azure.cosmosDBAccounts().define("andreas-test-db")
+                    .withRegion(Region.EUROPE_NORTH)
+                    .withNewResourceGroup("test-resource-group")
+                    .withKind(DatabaseAccountKind.GLOBAL_DOCUMENT_DB)
+                    .withSessionConsistency()
+                    .withWriteReplication(Region.EUROPE_NORTH)
+                    .withReadReplication(Region.EUROPE_NORTH)
+                    .create();
 
             saveInstance(request, instanceId);
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Created").build());
