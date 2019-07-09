@@ -20,6 +20,7 @@ import com.microsoft.azure.management.Azure;
 import com.microsoft.azure.management.cosmosdb.CosmosDBAccount;
 import com.microsoft.azure.management.cosmosdb.DatabaseAccountKind;
 import com.microsoft.azure.management.resources.fluentcore.arm.Region;
+import com.microsoft.rest.ServiceCallback;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceInstanceRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceInstance;
 import org.slf4j.Logger;
@@ -40,44 +41,12 @@ import java.util.Optional;
 public class CosmosDBService implements ServiceInstanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
+    private static final String RESOURCE_GROUP = "resource-group";
 
     private final ServiceInstanceRepository instanceRepository;
 
     public CosmosDBService(ServiceInstanceRepository instanceRepository) {
         this.instanceRepository = instanceRepository;
-    }
-
-    // EXAMPLE ON HOW TO FETCH A SECURITY TOKEN AND CALL THE AZURE API
-    //
-    //@PostConstruct
-    public void postConstruct() {
-
-
-//        String token = webClient.post()
-//                .uri("https://login.microsoftonline.com/" + tenantId + "/oauth2/token")
-//                .body(BodyInserters
-//                        .fromFormData("grant_type", "client_credentials")
-//                        .with("scope", "user_impersonation")
-//                        .with("resource", "https://management.azure.com/")
-//                ).headers(headers -> {
-//                    headers.setBasicAuth(clientId, clientSecret);
-//                })
-//                .retrieve()
-//                .bodyToMono(SecurityToken.class)
-//                .map(response -> {
-//                    logger.info("Received a security token [{}]", response.getAccessToken());
-//                    return response.getAccessToken();
-//                }).block();
-//
-//        webClient.get()
-//                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/test-cosmos-db-hackaton?api-version=2015-04-08")
-//                .headers(headers -> headers.setBearerAuth(token))
-//                .retrieve()
-//                .bodyToMono(String.class)
-//                .map(response -> {
-//                    logger.info(response);
-//                    return "Response: " + response;
-//                }).block();
     }
 
     @Override
@@ -91,7 +60,6 @@ public class CosmosDBService implements ServiceInstanceService {
         if (instanceRepository.existsById(instanceId)) {
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Already Exists in the database").build());
         } else {
-            // TO BE IMPLEMENTED
 
             Azure azure = null;
             try {
@@ -99,16 +67,27 @@ public class CosmosDBService implements ServiceInstanceService {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            CosmosDBAccount cosmosDBAccount = azure.cosmosDBAccounts().define("andreas-test-db")
-                    .withRegion(Region.EUROPE_NORTH)
-                    .withNewResourceGroup("test-resource-group")
+            azure.cosmosDBAccounts().define(instanceId)
+                    .withRegion(Region.EUROPE_WEST)
+                    .withNewResourceGroup((String) request.getParameters().get(RESOURCE_GROUP))
                     .withKind(DatabaseAccountKind.GLOBAL_DOCUMENT_DB)
                     .withSessionConsistency()
                     .withWriteReplication(Region.EUROPE_NORTH)
-                    .withReadReplication(Region.EUROPE_NORTH)
-                    .create();
+                    .createAsync(
+                            new ServiceCallback<CosmosDBAccount>() {
+                                @Override
+                                public void failure(Throwable throwable) {
+                                    logger.error("Houston, we have a problem!", throwable);
+                                }
 
-            saveInstance(request, instanceId);
+                                @Override
+                                public void success(CosmosDBAccount cosmosDBAccount) {
+                                    saveInstance(request, instanceId);
+                                }
+                            }
+                    );
+//                    .create();
+
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Created").build());
         }
     }
@@ -135,9 +114,31 @@ public class CosmosDBService implements ServiceInstanceService {
         String instanceId = request.getServiceInstanceId();
 
         if (instanceRepository.existsById(instanceId)) {
-            // TO BE IMPLEMENTED
 
-            instanceRepository.deleteById(instanceId);
+            Azure azure = null;
+            try {
+                azure = Azure.authenticate(new File(this.getClass().getClassLoader().getResource("auth.json").getFile())).withDefaultSubscription();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            Optional<CosmosDBAccount> optionalCosmosDBAccount = azure.cosmosDBAccounts().list().stream().filter(c -> c.name().equals(request.getServiceInstanceId())).findFirst();
+//                    getByResourceGroup("test-resource-group", "andreas-test-account");
+
+            CosmosDBAccount cosmosDBAccount = optionalCosmosDBAccount.orElseThrow(RuntimeException::new);
+
+            azure.cosmosDBAccounts().deleteByIdAsync(cosmosDBAccount.id(),
+                    new ServiceCallback<Void>() {
+                        @Override
+                        public void failure(Throwable throwable) {
+                            logger.error("Houston, we have a problem!", throwable);
+                        }
+
+                        @Override
+                        public void success(Void aVoid) {
+                            instanceRepository.deleteById(instanceId);
+                        }
+                    });
 
             return Mono.just(DeleteServiceInstanceResponse.builder().build());
         } else {

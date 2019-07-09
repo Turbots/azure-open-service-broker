@@ -1,5 +1,6 @@
 package io.pivotal.openservicebroker.azureosb;
 
+import java.time.Duration;
 import java.util.UUID;
 
 import org.assertj.core.api.Assertions;
@@ -10,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.client.AutoConfigureWebCl
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.cloud.servicebroker.model.binding.CreateServiceInstanceBindingRequest;
+import org.springframework.cloud.servicebroker.model.binding.DeleteServiceInstanceBindingRequest;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceRequest;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse;
 import org.springframework.http.HttpStatus;
@@ -33,6 +35,7 @@ public class AzureOpenServiceBrokerApplicationTests {
 
 
 	final static String INSTANCE_ID = "my-service-instance-id";
+	final static String RESOURCE_ID = "andreas-test-account";
 	final static String BINDING_ID = "my-service-instance-id";
 	@Test
 	public void contextLoads() {
@@ -45,6 +48,7 @@ public class AzureOpenServiceBrokerApplicationTests {
 
 	@Test
 	public void createServiceInstance() {
+		webTestClient = webTestClient.mutate().responseTimeout(Duration.ofMinutes(15)).build();
 		CreateServiceInstanceRequest request = CreateServiceInstanceRequest.builder().serviceDefinitionId("cosmosdb")
 				.planId("db-small").build();
 		webTestClient.put().uri("/v2/service_instances/{instanceId}", INSTANCE_ID)
@@ -59,5 +63,17 @@ public class AzureOpenServiceBrokerApplicationTests {
 
 		webTestClient.put().uri("/v2/service_instances/{instanceId}/service_bindings/{bindingId}",INSTANCE_ID, BINDING_ID)
 				.body(BodyInserters.fromObject(request)).exchange().expectStatus().isEqualTo(HttpStatus.CREATED);
+	}
+
+	@Test
+	public void deleteServiceInstance() {
+//		DeleteServiceInstanceBindingRequest request = DeleteServiceInstanceBindingRequest.builder()
+//				.build();
+
+		webTestClient = webTestClient.mutate().responseTimeout(Duration.ofMinutes(15)).build();
+
+		webTestClient.delete().uri("/v2/service_instances/{instanceId}?service_id={serviceId}&plan_id={planId}", RESOURCE_ID, "cosmosdb", "db-small")
+				.exchange().expectStatus().isEqualTo(HttpStatus.OK);
+
 	}
 }
