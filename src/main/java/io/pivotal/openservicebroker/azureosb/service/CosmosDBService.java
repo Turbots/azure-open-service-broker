@@ -20,10 +20,12 @@ import io.pivotal.openservicebroker.azureosb.data.repository.ServiceInstanceRepo
 import io.pivotal.openservicebroker.azureosb.model.ServiceInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.servicebroker.exception.ServiceInstanceDoesNotExistException;
 import org.springframework.cloud.servicebroker.model.instance.*;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse.CreateServiceInstanceResponseBuilder;
 import org.springframework.cloud.servicebroker.service.ServiceInstanceService;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -37,6 +39,15 @@ public class CosmosDBService implements ServiceInstanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
 
+    @Value("${clientSecret}")
+    private String clientSecret;
+    @Value("${tenantId}")
+    private String tenantId;
+    @Value("${clientId}")
+    private String clientId;
+    @Value("${subscriptionId}")
+    private String subscriptionId;
+
     private final ServiceInstanceRepository instanceRepository;
     private final WebClient webClient;
 
@@ -49,11 +60,7 @@ public class CosmosDBService implements ServiceInstanceService {
     //
     //@PostConstruct
     public void postConstruct() {
-        String tenantId = "29248f74-371f-4db2-9a50-c62a6877a0c1";
-        String clientId = "36ecff98-2d0d-4506-8434-273b3a708137";
-        String subscriptionId = "b247fdb9-4ee3-4f9e-a68b-5b16c2302ca2";
 
-        String clientSecret = "ENTER_SECRET_HERE";
 
         String token = webClient.post()
                 .uri("https://login.microsoftonline.com/" + tenantId + "/oauth2/token")
@@ -72,7 +79,7 @@ public class CosmosDBService implements ServiceInstanceService {
                 }).block();
 
         webClient.get()
-                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/dhubau-test?api-version=2015-04-08")
+                .uri("https://management.azure.com/subscriptions/" + subscriptionId + "/resourceGroups/test-resource-group/providers/Microsoft.DocumentDB/databaseAccounts/test-cosmos-db-hackaton?api-version=2015-04-08")
                 .headers(headers -> headers.setBearerAuth(token))
                 .retrieve()
                 .bodyToMono(String.class)
