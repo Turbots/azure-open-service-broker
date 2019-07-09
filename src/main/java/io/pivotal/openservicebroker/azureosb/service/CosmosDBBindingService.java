@@ -25,6 +25,7 @@ import org.springframework.cloud.servicebroker.service.ServiceInstanceBindingSer
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
 import java.util.Optional;
 
 @Service
@@ -50,7 +51,7 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         } else {
             responseBuilder
                     .bindingExisted(false)
-                    .credentials(null);
+                    .credentials(new HashMap<String, Object>());
         }
 
         return Mono.just(responseBuilder.build());

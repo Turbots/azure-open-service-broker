@@ -58,6 +58,6 @@ public class AzureOpenServiceBrokerApplicationTests {
 		.serviceInstanceId(INSTANCE_ID).build();
 
 		webTestClient.put().uri("/v2/service_instances/{instanceId}/service_bindings/{bindingId}",INSTANCE_ID, BINDING_ID)
-				.body(BodyInserters.fromObject(request)).exchange().expectStatus().isEqualTo(HttpStatus.OK);
+				.body(BodyInserters.fromObject(request)).exchange().expectStatus().isEqualTo(HttpStatus.CREATED);
 	}
 }
