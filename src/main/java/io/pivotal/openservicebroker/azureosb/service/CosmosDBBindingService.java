@@ -16,8 +16,15 @@
 
 package io.pivotal.openservicebroker.azureosb.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.microsoft.azure.management.Azure;
+import com.microsoft.azure.management.cosmosdb.*;
+import com.microsoft.azure.management.resources.fluentcore.arm.Region;
+import com.microsoft.rest.ServiceCallback;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceBindingRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceBinding;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.servicebroker.exception.ServiceInstanceBindingDoesNotExistException;
 import org.springframework.cloud.servicebroker.model.binding.*;
 import org.springframework.cloud.servicebroker.model.binding.CreateServiceInstanceAppBindingResponse.CreateServiceInstanceAppBindingResponseBuilder;
@@ -25,13 +32,16 @@ import org.springframework.cloud.servicebroker.service.ServiceInstanceBindingSer
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.HashMap;
-import java.util.Optional;
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 @Service
 public class CosmosDBBindingService implements ServiceInstanceBindingService {
 
     private final ServiceBindingRepository bindingRepository;
+    private static final String RESOURCE_GROUP = "resourceGroupName";
 
     public CosmosDBBindingService(ServiceBindingRepository bindingRepository) {
         this.bindingRepository = bindingRepository;
@@ -51,10 +61,44 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         } else {
             responseBuilder
                     .bindingExisted(false)
-                    .credentials(new HashMap<String, Object>());
+                    .credentials(retrieveCredentials((String) request.getParameters().get(RESOURCE_GROUP), request.getServiceInstanceId()));
         }
 
         return Mono.just(responseBuilder.build());
+    }
+
+    private Map<String, Object> retrieveCredentials(String resourceGroup, String instanceId) {
+        Azure azure = null;
+        try {
+            azure = Azure.authenticate(new File(this.getClass().getClassLoader().getResource("auth.json").getFile())).withDefaultSubscription();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        DatabaseAccountListConnectionStringsResult connectionStrings = azure.cosmosDBAccounts().listConnectionStrings(resourceGroup, instanceId);
+        DatabaseAccountListKeysResult keys = azure.cosmosDBAccounts().listKeys(resourceGroup, instanceId);
+
+        Map<String, Object> credentials = new HashMap<>();
+        List<Map<String, String>> connectionStringList = new ArrayList<>();
+
+        for (DatabaseAccountConnectionString connectionString : connectionStrings.connectionStrings()) {
+            Map<String, String> connectionStringMap = new HashMap<>();
+            connectionStringMap.put("connectionString", connectionString.connectionString());
+            connectionStringMap.put("description", connectionString.description());
+            connectionStringList.add(connectionStringMap);
+        }
+
+        credentials.put("cosmosdb_connection_strings", connectionStringList);
+
+        Map<String, String> keysMap = new HashMap<>();
+        keysMap.put("primaryMasterKey", keys.primaryMasterKey());
+        keysMap.put("primaryReadonlyMasterKey", keys.primaryReadonlyMasterKey());
+        keysMap.put("secondaryMasterKey", keys.secondaryMasterKey());
+        keysMap.put("secondaryReadonlyMasterKey", keys.secondaryReadonlyMasterKey());
+
+        credentials.put("cosmosdb_keys", keysMap);
+
+        return credentials;
     }
 
     @Override

@@ -34,9 +34,12 @@ public class AzureOpenServiceBrokerApplicationTests {
 	private CosmosDBService cosmosDBService;
 
 
-	final static String INSTANCE_ID = "my-service-instance-id";
+	final static String INSTANCE_ID = "andreas-test-db";
 	final static String RESOURCE_ID = "andreas-test-account";
-	final static String BINDING_ID = "my-service-instance-id";
+	final static String BINDING_ID = "my-binding-id";
+	final static String RESOURCE_GROUP = "test-resource-group";
+	final static String RESOURCE_GROUP_KEY = "resourceGroupName";
+
 	@Test
 	public void contextLoads() {
 	}
@@ -49,19 +52,25 @@ public class AzureOpenServiceBrokerApplicationTests {
 	@Test
 	public void createServiceInstance() {
 		webTestClient = webTestClient.mutate().responseTimeout(Duration.ofMinutes(15)).build();
-		CreateServiceInstanceRequest request = CreateServiceInstanceRequest.builder().serviceDefinitionId("cosmosdb")
-				.planId("db-small").build();
+		CreateServiceInstanceRequest request = CreateServiceInstanceRequest.builder()
+				.serviceDefinitionId("cosmosdb")
+				.parameters(RESOURCE_GROUP_KEY, RESOURCE_GROUP)
+				.planId("db-small")
+				.build();
 		webTestClient.put().uri("/v2/service_instances/{instanceId}", INSTANCE_ID)
 				.body(BodyInserters.fromObject(request)).exchange().expectStatus().isEqualTo(HttpStatus.OK);
 	}
 
 	@Test
 	public void bindServiceInstance() {
-		CreateServiceInstanceBindingRequest request = CreateServiceInstanceBindingRequest.builder().serviceDefinitionId("cosmosdb")
-		.planId("db-small")
-		.serviceInstanceId(INSTANCE_ID).build();
+		webTestClient = webTestClient.mutate().responseTimeout(Duration.ofMinutes(15)).build();
+		CreateServiceInstanceBindingRequest request = CreateServiceInstanceBindingRequest.builder()
+				.serviceDefinitionId("cosmosdb")
+				.parameters(RESOURCE_GROUP_KEY, RESOURCE_GROUP)
+				.planId("db-small")
+				.serviceInstanceId(INSTANCE_ID).build();
 
-		webTestClient.put().uri("/v2/service_instances/{instanceId}/service_bindings/{bindingId}",INSTANCE_ID, BINDING_ID)
+		webTestClient.put().uri("/v2/service_instances/{instanceId}/service_bindings/{bindingId}", INSTANCE_ID, BINDING_ID)
 				.body(BodyInserters.fromObject(request)).exchange().expectStatus().isEqualTo(HttpStatus.CREATED);
 	}
 

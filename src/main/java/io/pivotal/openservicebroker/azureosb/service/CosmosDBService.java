@@ -41,7 +41,7 @@ import java.util.Optional;
 public class CosmosDBService implements ServiceInstanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
-    private static final String RESOURCE_GROUP = "resource-group";
+    private static final String RESOURCE_GROUP = "resourceGroupName";
 
     private final ServiceInstanceRepository instanceRepository;
 
@@ -86,7 +86,6 @@ public class CosmosDBService implements ServiceInstanceService {
                                 }
                             }
                     );
-//                    .create();
 
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Created").build());
         }
