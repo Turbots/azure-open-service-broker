@@ -9,6 +9,9 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  application:
+    name: test-app
+
 logging:
   level:
     org.springframework.web.reactive: DEBUG

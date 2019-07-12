@@ -17,28 +17,21 @@ public class CatalogConfiguration {
     }
 
     private ServiceDefinition cosmosDbService() {
-        Plan account = Plan.builder()
-                .id("account")
-                .name("account")
-                .description("Creates a CosmosDB account")
-                .free(true)
-                .bindable(false)
-                .build();
         Plan database = Plan.builder()
-                .id("database")
-                .name("database")
-                .description("Creates an empty CosmosDB database")
+                .id("db-small")
+                .name("db-small")
+                .description("Provisions a new CosmosDB database on Azure")
                 .free(true)
                 .build();
 
         return ServiceDefinition.builder()
                 .id("cosmosdb")
                 .name("CosmosDB")
-                .description("CosmosDB Account")
+                .description("CosmosDB Service Broker")
                 .bindable(true)
                 .planUpdateable(false)
                 .tags("cosmosdb", "database")
-                .plans(account, database)
+                .plans(database)
                 .build();
     }
 }

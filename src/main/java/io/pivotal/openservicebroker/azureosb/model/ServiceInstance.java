@@ -25,17 +25,23 @@ import java.util.Map;
 public class ServiceInstance {
 
     @Id
-    @Column(length = 50)
+    @Column
     private final String instanceId;
 
-    @Column(length = 50)
+    @Column
     private final String serviceDefinitionId;
 
-    @Column(length = 50)
+    @Column
     private final String planId;
 
+    @Column
+    private final String spaceName;
+
+    @Column
+    private final String orgName;
+
     @ElementCollection
-    @MapKeyColumn(name = "parameter_name", length = 100)
+    @MapKeyColumn(name = "parameter_name")
     @Column(name = "parameter_value")
     @CollectionTable(name = "service_instance_parameters", joinColumns = @JoinColumn(name = "instance_id"))
     @Convert(converter = ObjectToStringConverter.class, attributeName = "value")
@@ -46,14 +52,18 @@ public class ServiceInstance {
         instanceId = null;
         serviceDefinitionId = null;
         planId = null;
+        orgName = null;
+        spaceName = null;
         parameters = null;
     }
 
-    public ServiceInstance(String instanceId, String serviceDefinitionId, String planId,
+    public ServiceInstance(String instanceId, String serviceDefinitionId, String planId, String orgName, String spaceName,
                            Map<String, Object> parameters) {
         this.instanceId = instanceId;
         this.serviceDefinitionId = serviceDefinitionId;
         this.planId = planId;
+        this.orgName = orgName;
+        this.spaceName = spaceName;
         this.parameters = parameters;
     }
 
@@ -67,6 +77,14 @@ public class ServiceInstance {
 
     public String getPlanId() {
         return planId;
+    }
+
+    public String getOrgName() {
+        return orgName;
+    }
+
+    public String getSpaceName() {
+        return spaceName;
     }
 
     public Map<String, Object> getParameters() {
