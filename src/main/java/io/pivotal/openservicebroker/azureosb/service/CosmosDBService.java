@@ -45,6 +45,7 @@ import java.util.Optional;
 public class CosmosDBService implements ServiceInstanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
+
     private static final String RESOURCE_GROUP = "resourceGroupName";
 
     private final CloudFoundryOperations cloudFoundryOperations;

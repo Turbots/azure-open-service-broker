@@ -22,6 +22,8 @@ import com.microsoft.azure.management.cosmosdb.DatabaseAccountListConnectionStri
 import com.microsoft.azure.management.cosmosdb.DatabaseAccountListKeysResult;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceBindingRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceBinding;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.servicebroker.exception.ServiceInstanceBindingDoesNotExistException;
 import org.springframework.cloud.servicebroker.model.binding.*;
 import org.springframework.cloud.servicebroker.model.binding.CreateServiceInstanceAppBindingResponse.CreateServiceInstanceAppBindingResponseBuilder;
@@ -33,8 +35,12 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+import static java.util.Objects.requireNonNull;
+
 @Service
 public class CosmosDBBindingService implements ServiceInstanceBindingService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CosmosDBBindingService.class);
 
     private final ServiceBindingRepository bindingRepository;
     private static final String RESOURCE_GROUP = "resourceGroupName";
@@ -67,9 +73,9 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
     private Map<String, Object> retrieveCredentials(String resourceGroup, String instanceId) {
         Azure azure = null;
         try {
-            azure = Azure.authenticate(new File(this.getClass().getClassLoader().getResource("auth.json").getFile())).withDefaultSubscription();
+            azure = Azure.authenticate(new File(requireNonNull(this.getClass().getClassLoader().getResource("auth.json")).getFile())).withDefaultSubscription();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Could not retrieve credentials from file auth.json", e);
         }
 
         DatabaseAccountListConnectionStringsResult connectionStrings = azure.cosmosDBAccounts().listConnectionStrings(resourceGroup, instanceId);
