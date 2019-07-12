@@ -23,15 +23,19 @@ import com.microsoft.azure.management.resources.fluentcore.arm.Region;
 import com.microsoft.rest.ServiceCallback;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceInstanceRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceInstance;
+import org.cloudfoundry.operations.CloudFoundryOperations;
+import org.cloudfoundry.operations.organizations.OrganizationSummary;
+import org.cloudfoundry.operations.spaces.SpaceSummary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.servicebroker.exception.ServiceInstanceDoesNotExistException;
+import org.springframework.cloud.servicebroker.model.CloudFoundryContext;
 import org.springframework.cloud.servicebroker.model.instance.*;
 import org.springframework.cloud.servicebroker.model.instance.CreateServiceInstanceResponse.CreateServiceInstanceResponseBuilder;
 import org.springframework.cloud.servicebroker.service.ServiceInstanceService;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,9 +47,12 @@ public class CosmosDBService implements ServiceInstanceService {
     private static final Logger logger = LoggerFactory.getLogger(CosmosDBService.class);
     private static final String RESOURCE_GROUP = "resourceGroupName";
 
+    private final CloudFoundryOperations cloudFoundryOperations;
+
     private final ServiceInstanceRepository instanceRepository;
 
-    public CosmosDBService(ServiceInstanceRepository instanceRepository) {
+    public CosmosDBService(CloudFoundryOperations cloudFoundryOperations, ServiceInstanceRepository instanceRepository) {
+        this.cloudFoundryOperations = cloudFoundryOperations;
         this.instanceRepository = instanceRepository;
     }
 
@@ -60,7 +67,6 @@ public class CosmosDBService implements ServiceInstanceService {
         if (instanceRepository.existsById(instanceId)) {
             return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Already Exists in the database").build());
         } else {
-
             Azure azure = null;
             try {
                 azure = Azure.authenticate(new File(this.getClass().getClassLoader().getResource("auth.json").getFile())).withDefaultSubscription();
@@ -82,12 +88,13 @@ public class CosmosDBService implements ServiceInstanceService {
 
                                 @Override
                                 public void success(CosmosDBAccount cosmosDBAccount) {
+                                    logger.info("Successfully started database creation for {}. Actual availability can take more than 15 minutes.", instanceId);
                                     saveInstance(request, instanceId);
                                 }
                             }
                     );
 
-            return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Created").build());
+            return Mono.just(responseBuilder.instanceExisted(true).operation("Service Instance Creating").build());
         }
     }
 
@@ -110,9 +117,12 @@ public class CosmosDBService implements ServiceInstanceService {
 
     @Override
     public Mono<DeleteServiceInstanceResponse> deleteServiceInstance(DeleteServiceInstanceRequest request) {
+        logger.info("Deleting Service Instance [{}] for Service [{}] and Plan [{}]", request.getServiceInstanceId(), request.getServiceDefinitionId(), request.getPlanId());
+
         String instanceId = request.getServiceInstanceId();
 
         if (instanceRepository.existsById(instanceId)) {
+            verifySpaceAndOrg(request, instanceId);
 
             Azure azure = null;
             try {
@@ -122,7 +132,6 @@ public class CosmosDBService implements ServiceInstanceService {
             }
 
             Optional<CosmosDBAccount> optionalCosmosDBAccount = azure.cosmosDBAccounts().list().stream().filter(c -> c.name().equals(request.getServiceInstanceId())).findFirst();
-//                    getByResourceGroup("test-resource-group", "andreas-test-account");
 
             CosmosDBAccount cosmosDBAccount = optionalCosmosDBAccount.orElseThrow(RuntimeException::new);
 
@@ -145,9 +154,48 @@ public class CosmosDBService implements ServiceInstanceService {
         }
     }
 
-    private void saveInstance(CreateServiceInstanceRequest request, String instanceId) {
-        ServiceInstance serviceInstance = new ServiceInstance(instanceId, request.getServiceDefinitionId(),
-                request.getPlanId(), request.getParameters());
-        instanceRepository.save(serviceInstance);
+    private void verifySpaceAndOrg(DeleteServiceInstanceRequest request, String instanceId) {
+        Mono<String> orgName = resolveOrgName(((CloudFoundryContext) request.getOriginatingIdentity()).getOrganizationGuid());
+        Mono<String> spaceName = resolveSpaceName(((CloudFoundryContext) request.getOriginatingIdentity()).getSpaceGuid());
+
+        String instanceOrgName = instanceRepository.findById(instanceId).get().getOrgName();
+        boolean sameOrg = instanceOrgName.equals(orgName);
+        if (!sameOrg) {
+            throw new RuntimeException("Requesting to delete serviceInstance for wrong org. Your org is " + orgName + ", but the instance has org " + instanceOrgName + ".");
+        }
+        String instanceSpaceName = instanceRepository.findById(instanceId).get().getSpaceName();
+        boolean sameSpace = instanceSpaceName.equals(spaceName);
+        if (!sameSpace) {
+            throw new RuntimeException("Requesting to delete serviceInstance for wrong space. Your space is " + spaceName + ", but the instance has space " + instanceSpaceName + ".");
+        }
     }
+
+    private void saveInstance(CreateServiceInstanceRequest request, String instanceId) {
+        Mono<String> orgName = resolveOrgName(((CloudFoundryContext) request.getContext()).getOrganizationGuid());
+        Mono<String> spaceName = resolveSpaceName(((CloudFoundryContext) request.getContext()).getSpaceGuid());
+        Mono<Tuple2<String, String>> orgSpaceTuple = orgName.zipWith(spaceName);
+        orgSpaceTuple.subscribe(tuple -> {
+            logger.info("Saving service with id {} into the Service Broker database", instanceId);
+            ServiceInstance serviceInstance = new ServiceInstance(instanceId, request.getServiceDefinitionId(),
+                    request.getPlanId(), tuple.getT1(), tuple.getT2(), request.getParameters());
+            instanceRepository.save(serviceInstance);
+        });
+    }
+
+    private Mono<String> resolveOrgName(String organizationGuid) {
+        return cloudFoundryOperations.organizations()
+                .list()
+                .filter(os -> os.getId().equals(organizationGuid))
+                .map(OrganizationSummary::getName)
+                .next();
+    }
+
+    private Mono<String> resolveSpaceName(String spaceGuid) {
+        return cloudFoundryOperations.spaces()
+                .list()
+                .filter(os -> os.getId().equals(spaceGuid))
+                .map(SpaceSummary::getName)
+                .next();
+    }
+
 }

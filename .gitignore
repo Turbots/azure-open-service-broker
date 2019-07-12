@@ -3,8 +3,8 @@ target/
 .mvn/
 !**/src/main/**
 !**/src/test/**
-**/secrets.yml
 **/auth.json
+**/*credentials.yml
 
 ### STS ###
 .apt_generated

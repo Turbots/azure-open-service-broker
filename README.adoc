@@ -18,6 +18,39 @@ This can be a public hosted Cloud Foundry, a private Cloud Foundry, or a worksta
 
 Use the `cf` CLI to https://docs.cloudfoundry.org/cf-cli/getting-started.html#login[log into] Cloud Foundry and target an organization and space for deployment of an application.
 
+== Add credentials
+
+Under src/main/resources add the following two files:
+
+1. auth.json
+```json
+{
+  "clientId": "your-very-long-clientId",
+  "clientSecret": "your-very-long-secret",
+  "subscriptionId": "your-very-long-subscriptionId",
+  "tenantId": "your-very-long-tenantId",
+  "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
+  "resourceManagerEndpointUrl": "https://management.azure.com/",
+  "activeDirectoryGraphResourceId": "https://graph.windows.net/",
+  "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
+  "galleryEndpointUrl": "https://gallery.azure.com/",
+  "managementEndpointUrl": "https://management.core.windows.net/"
+}
+```
+
+1. cloudfoundry-credentials.yml
+```yml
+spring:
+  cloud:
+    cloudfoundry:
+      url: your-cloud-foundry-api-endpoint
+      username: ${CF_USERNAME:your-pcf-username}
+      password: ${CF_PASSWORD:your-pcf-password}
+      org: ${CF_ORG:your-default-pcf-org}
+      space: ${CF_SPACE:your-default-pcf-space}
+      skipSslValidation: true
+```
+
 == Build the service broker application
 
 You can use the Maven wrapper included in the project or your own Maven installation to package the application.

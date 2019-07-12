@@ -16,15 +16,12 @@
 
 package io.pivotal.openservicebroker.azureosb.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.microsoft.azure.management.Azure;
-import com.microsoft.azure.management.cosmosdb.*;
-import com.microsoft.azure.management.resources.fluentcore.arm.Region;
-import com.microsoft.rest.ServiceCallback;
+import com.microsoft.azure.management.cosmosdb.DatabaseAccountConnectionString;
+import com.microsoft.azure.management.cosmosdb.DatabaseAccountListConnectionStringsResult;
+import com.microsoft.azure.management.cosmosdb.DatabaseAccountListKeysResult;
 import io.pivotal.openservicebroker.azureosb.data.repository.ServiceBindingRepository;
 import io.pivotal.openservicebroker.azureosb.model.ServiceBinding;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.servicebroker.exception.ServiceInstanceBindingDoesNotExistException;
 import org.springframework.cloud.servicebroker.model.binding.*;
 import org.springframework.cloud.servicebroker.model.binding.CreateServiceInstanceAppBindingResponse.CreateServiceInstanceAppBindingResponseBuilder;
@@ -35,7 +32,6 @@ import reactor.core.publisher.Mono;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 @Service
 public class CosmosDBBindingService implements ServiceInstanceBindingService {
@@ -57,11 +53,12 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         if (binding.isPresent()) {
             responseBuilder
                     .bindingExisted(true)
-                    .credentials(binding.get().getCredentials());
+                    .credentials(retrieveCredentials((String) request.getParameters().get(RESOURCE_GROUP), request.getServiceInstanceId()));
         } else {
             responseBuilder
                     .bindingExisted(false)
                     .credentials(retrieveCredentials((String) request.getParameters().get(RESOURCE_GROUP), request.getServiceInstanceId()));
+            bindingRepository.save(new ServiceBinding(request.getBindingId(),request.getParameters(), new HashMap<>()));
         }
 
         return Mono.just(responseBuilder.build());
@@ -78,6 +75,12 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         DatabaseAccountListConnectionStringsResult connectionStrings = azure.cosmosDBAccounts().listConnectionStrings(resourceGroup, instanceId);
         DatabaseAccountListKeysResult keys = azure.cosmosDBAccounts().listKeys(resourceGroup, instanceId);
 
+        Map<String, Object> credentials = toCredentialsMap(connectionStrings, keys);
+
+        return credentials;
+    }
+
+    private Map<String, Object> toCredentialsMap(DatabaseAccountListConnectionStringsResult connectionStrings, DatabaseAccountListKeysResult keys) {
         Map<String, Object> credentials = new HashMap<>();
         List<Map<String, String>> connectionStringList = new ArrayList<>();
 
@@ -97,7 +100,6 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         keysMap.put("secondaryReadonlyMasterKey", keys.secondaryReadonlyMasterKey());
 
         credentials.put("cosmosdb_keys", keysMap);
-
         return credentials;
     }
 
@@ -110,7 +112,7 @@ public class CosmosDBBindingService implements ServiceInstanceBindingService {
         if (serviceBinding.isPresent()) {
             return Mono.just(GetServiceInstanceAppBindingResponse.builder()
                     .parameters(serviceBinding.get().getParameters())
-                    .credentials(serviceBinding.get().getCredentials())
+                    .credentials(retrieveCredentials((String) serviceBinding.get().getParameters().get(RESOURCE_GROUP), request.getServiceInstanceId()))
                     .build());
         } else {
             throw new ServiceInstanceBindingDoesNotExistException(bindingId);
